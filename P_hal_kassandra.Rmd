@@ -93,25 +93,55 @@ ggplot(ho_uhe, aes(x=factor(Pop), y=Mean, fill = factor(measure))) +
 div <- poppr(obj, plot=F)
 div <- div[,!names(div)%in%c("File","Hexp")]
 
-#na
-summ <- summary(obj)
-na <- summ[["pop.n.all"]]/length(summ[["loc.n.all"]])
-na <- c(na, mean(na))
-div$na <- na
+# #na
+# summ <- summary(obj)
+# na <- summ[["pop.n.all"]]/length(summ[["loc.n.all"]])
+# na <- c(na, mean(na))
+# div$na <- na
 
 stats <- basic.stats(obj)
 
 # He - Nei 1978 poppr
 obj_list <- seppop(obj)
+
+  # get summary statistics for each pop
 summ_p <- list()
 for(i in 1: length(obj_list)){
   summ_p[[i]] <- locus_table(obj_list[[i]])
 }
 
-sd(summ_list[["NB"]]$Hexp)/sqrt(length(summ_list[["NB"]]$Hexp))
+  # isolate uhe mean value for each pop
+uhe <- vector(mode = "double")
+for(i in 1: length(obj_list)){
+uhe[i] <- summ_p[[i]][ length(summ_p[[i]][,3]) , 3 ] # I pick the last line
+}
+  # isolate uhe loci values for each pop
+summ_uhe <- list()
+for(i in 1: length(obj_list)){
+summ_uhe[[i]] <- summ_p[[i]][ -length(summ_p[[i]][,3]) , 3 ] # I pick all lines but the last
+}
+  #calculate standard error of the mean
+sem_uhe <- list()
+for(i in 1: length(obj_list)){
+sem_uhe[[i]] <- sd(summ_uhe[[i]])/sqrt(length(summ_uhe[[i]]))
+}
 
-
-
+  # isolate na mean value for each pop
+na <- vector(mode = "double")
+for(i in 1: length(obj_list)){
+na[i] <- summ_p[[i]][ length(summ_p[[i]][,1]) , 1 ] # I pick the last line
+}
+  # isolate uhe loci values for each pop
+summ_na <- list()
+for(i in 1: length(obj_list)){
+summ_na[[i]] <- summ_p[[i]][ -length(summ_p[[i]][,1]) , 1 ] # I pick all lines but the last
+}
+  #calculate standard error of the mean
+sem_na <- list()
+for(i in 1: length(obj_list)){
+sem_na[[i]] <- sd(summ_na[[i]])/sqrt(length(summ_na[[i]]))
+}
+sem_na <- unlist(sem_na)
 
 # #ne hierfstat
 # stats[["ne"]] <- 1 / (1 - (stats[["Hs"]]))
@@ -136,10 +166,10 @@ ar <- colMeans(ar[["Ar"]])
 Ho <- colMeans(stats$Ho, na.rm=T)
 Hs <- colMeans(stats$Hs, na.rm=T)
 Fis <- colMeans(stats$Fis, na.rm=T)
-div2 <- data.frame(Ar=ar, ne=ne, LGP=LGP, Ho=Ho, Hs=Hs, Fis=Fis)
+div2 <- data.frame(A=na, A_se=sem_na, Ar=ar, ne=ne, LGP=LGP, Ho=Ho, Hs=Hs, Fis=Fis)
 tots <- colMeans(div2) #TOTAL FIS IS USUALLY CALCULATED FROM MEAN HO AND MEAN Hs - NOT THIS WAY!
 div2 <- rbind(div2, tots)
-div <- cbind(div[,c("Pop", "N", "na")], div2)
+div <- cbind(div[,c("Pop", "N")], div2)
 PA <- rowSums(private_alleles(obj, count.alleles=F))
 PA <- data.frame(PA)
 PA <- rbind(PA, Total=colSums(PA))
