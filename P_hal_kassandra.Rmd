@@ -90,8 +90,8 @@ ggplot(ho_uhe, aes(x=factor(Pop), y=Mean, fill = factor(measure))) +
 #### create a second table for standard errors so that it can be displayed nicely
 #### internally merge the two tables and create ggplot graphs
 ```{r table, cache=TRUE}
-div <- poppr(obj, plot=F)
-div <- div[,!names(div)%in%c("File","Hexp")]
+# div <- poppr(obj, plot=F)
+# div <- div[,!names(div)%in%c("File","Hexp")]
 
 # #na
 # summ <- summary(obj)
@@ -99,10 +99,20 @@ div <- div[,!names(div)%in%c("File","Hexp")]
 # na <- c(na, mean(na))
 # div$na <- na
 
-stats <- basic.stats(obj)
 
 # He - Nei 1978 poppr
 obj_list <- seppop(obj)
+
+# Pop names
+Pops <- c(popNames(obj), "Total")
+
+# Number of alleles
+N <- list()
+for(i in 1: length(obj_list)){
+N[[i]] <- nrow(obj_list[[i]]@tab) 
+}
+N <- unlist(N)
+N <- c(N, sum(N))
 
   # get summary statistics for each pop
 summ_p <- list()
@@ -115,6 +125,8 @@ uhe <- vector(mode = "double")
 for(i in 1: length(obj_list)){
 uhe[i] <- summ_p[[i]][ length(summ_p[[i]][,3]) , 3 ] # I pick the last line
 }
+uhe_col <- c(uhe, mean(uhe)) # column to be added to the summary table
+
   # isolate uhe loci values for each pop
 summ_uhe <- list()
 for(i in 1: length(obj_list)){
@@ -125,13 +137,22 @@ sem_uhe <- list()
 for(i in 1: length(obj_list)){
 sem_uhe[[i]] <- sd(summ_uhe[[i]])/sqrt(length(summ_uhe[[i]]))
 }
+sem_uhe <- unlist(sem_uhe)
+
+  #calculate standard error of the mean of the means
+sem_uhe_2 <- sd(unlist(summ_uhe)) / sqrt(length(unlist(summ_uhe)))
+
+    #combine standard errors
+sem_uhe_col <- c(sem_uhe, sem_uhe_2)
 
   # isolate na mean value for each pop
 na <- vector(mode = "double")
 for(i in 1: length(obj_list)){
 na[i] <- summ_p[[i]][ length(summ_p[[i]][,1]) , 1 ] # I pick the last line
 }
-  # isolate uhe loci values for each pop
+na_col <- c(na, mean(na)) # column to be added to the summary table
+
+  # isolate na loci values for each pop
 summ_na <- list()
 for(i in 1: length(obj_list)){
 summ_na[[i]] <- summ_p[[i]][ -length(summ_p[[i]][,1]) , 1 ] # I pick all lines but the last
@@ -143,11 +164,22 @@ sem_na[[i]] <- sd(summ_na[[i]])/sqrt(length(summ_na[[i]]))
 }
 sem_na <- unlist(sem_na)
 
+#calculate standard error of the mean of the means
+sem_na_2 <- sd(unlist(summ_na)) / sqrt(length(unlist(summ_na)))
+
+    #combine standard errors
+sem_na_col <- c(sem_na, sem_na_2)
+
 # #ne hierfstat
 # stats[["ne"]] <- 1 / (1 - (stats[["Hs"]]))
 # ne <- colMeans(stats[["ne"]], na.rm=T)
 
 #ne adegenet
+summ_list <- list()
+for(i in 1: length(obj_list)){
+  summ_list[[i]] <- summary(obj_list[[i]])
+}
+
 ne <- list()
 for(i in 1:length(summ_list)){
   ne[[i]] <- 1 / (1 - summ_list[[i]][["Hexp"]])
@@ -163,10 +195,14 @@ LGP <- LGP[-3]
 ar <- allelic.richness(obj)
 ar <- colMeans(ar[["Ar"]])
 
+
+stats <- basic.stats(obj)
+
 Ho <- colMeans(stats$Ho, na.rm=T)
-Hs <- colMeans(stats$Hs, na.rm=T)
+Ho_col <- c(Ho, mean(Ho))
+# Hs <- colMeans(stats$Hs, na.rm=T)
 Fis <- colMeans(stats$Fis, na.rm=T)
-div2 <- data.frame(A=na, A_se=sem_na, Ar=ar, ne=ne, LGP=LGP, Ho=Ho, Hs=Hs, Fis=Fis)
+div2 <- data.frame(A=na, A_se=sem_na, Ar=ar, ne=ne, LGP=LGP, Ho=Ho, He=uhe, He_se=sem_uhe, Fis=Fis)
 tots <- colMeans(div2) #TOTAL FIS IS USUALLY CALCULATED FROM MEAN HO AND MEAN Hs - NOT THIS WAY!
 div2 <- rbind(div2, tots)
 div <- cbind(div[,c("Pop", "N")], div2)
@@ -179,6 +215,7 @@ is.num <- sapply(div, is.numeric)
 div[is.num] <- lapply(div[is.num], round, 3)
 knitr::kable(div)
 ```
+
 ### Better use GenAlEx output as it provides bootstraped ses and cis
 ```{r basic.stats}
 basic.stats(obj)
