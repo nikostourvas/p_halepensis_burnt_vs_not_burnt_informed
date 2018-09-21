@@ -83,6 +83,9 @@ ho_uhe <- bind_rows(measure_list[["Ho"]], measure_list[["uHe"]])
 
 ggplot(ho_uhe, aes(x=factor(Pop), y=Mean, fill = factor(measure))) +
   geom_bar(stat = "identity", position=position_dodge(0.5), width = 0.25)
+
+ggplot(ho_uhe, aes(x=factor(Pop), y=Mean, fill = factor(measure))) +
+  geom_bar(stat = "identity", position="dodge")
 ```
 
 
@@ -106,7 +109,7 @@ obj_list <- seppop(obj)
 # Pop names
 Pops <- c(popNames(obj), "Total")
 
-# Number of alleles
+# Number of individuals
 N <- list()
 for(i in 1: length(obj_list)){
 N[[i]] <- nrow(obj_list[[i]]@tab) 
@@ -115,22 +118,22 @@ N <- unlist(N)
 N <- c(N, sum(N))
 
   # get summary statistics for each pop
-summ_p <- list()
+stats_p <- list()
 for(i in 1: length(obj_list)){
-  summ_p[[i]] <- locus_table(obj_list[[i]])
+  stats_p[[i]] <- locus_table(obj_list[[i]])
 }
 
   # isolate uhe mean value for each pop
 uhe <- vector(mode = "double")
 for(i in 1: length(obj_list)){
-uhe[i] <- summ_p[[i]][ length(summ_p[[i]][,3]) , 3 ] # I pick the last line
+uhe[i] <- stats_p[[i]][ length(stats_p[[i]][,3]) , 3 ] # I pick the last line
 }
 uhe_col <- c(uhe, mean(uhe)) # column to be added to the summary table
 
   # isolate uhe loci values for each pop
 summ_uhe <- list()
 for(i in 1: length(obj_list)){
-summ_uhe[[i]] <- summ_p[[i]][ -length(summ_p[[i]][,3]) , 3 ] # I pick all lines but the last
+summ_uhe[[i]] <- stats_p[[i]][ -length(stats_p[[i]][,3]) , 3 ] # I pick all lines but the last
 }
   #calculate standard error of the mean
 sem_uhe <- list()
@@ -148,14 +151,14 @@ sem_uhe_col <- c(sem_uhe, sem_uhe_2)
   # isolate na mean value for each pop
 na <- vector(mode = "double")
 for(i in 1: length(obj_list)){
-na[i] <- summ_p[[i]][ length(summ_p[[i]][,1]) , 1 ] # I pick the last line
+na[i] <- stats_p[[i]][ length(stats_p[[i]][,1]) , 1 ] # I pick the last line
 }
 na_col <- c(na, mean(na)) # column to be added to the summary table
 
   # isolate na loci values for each pop
 summ_na <- list()
 for(i in 1: length(obj_list)){
-summ_na[[i]] <- summ_p[[i]][ -length(summ_p[[i]][,1]) , 1 ] # I pick all lines but the last
+summ_na[[i]] <- stats_p[[i]][ -length(stats_p[[i]][,1]) , 1 ] # I pick all lines but the last
 }
   #calculate standard error of the mean
 sem_na <- list()
@@ -170,22 +173,35 @@ sem_na_2 <- sd(unlist(summ_na)) / sqrt(length(unlist(summ_na)))
     #combine standard errors
 sem_na_col <- c(sem_na, sem_na_2)
 
-# #ne hierfstat
-# stats[["ne"]] <- 1 / (1 - (stats[["Hs"]]))
-# ne <- colMeans(stats[["ne"]], na.rm=T)
+
+# basic stats hierfstat
+stats <- basic.stats(obj)
+
+#ne hierfstat
+stats[["ne"]] <- 1 / (1 - (stats[["Hs"]]))
+ne_h <- colMeans(stats[["ne"]], na.rm=T)
 
 #ne adegenet
-summ_list <- list()
+stats_a_list <- list()
 for(i in 1: length(obj_list)){
-  summ_list[[i]] <- summary(obj_list[[i]])
+  stats_a_list[[i]] <- summary(obj_list[[i]])
 }
 
 ne <- list()
-for(i in 1:length(summ_list)){
-  ne[[i]] <- 1 / (1 - summ_list[[i]][["Hexp"]])
+for(i in 1:length(stats_a_list)){
+  ne[[i]] <- 1 / (1 - stats_a_list[[i]][["Hexp"]])
 }
 ne <- as.data.frame(ne)
 ne <- colMeans(ne)
+
+#ne poppr
+ne_p <- list()
+for(i in 1:length(stats_p))
+  ne_p[[i]] <- 1 / (1 - stats_p[[i]][-nrow(stats_p[[1]]), "Hexp"])
+  
+ne_p <- as.data.frame(ne_p)
+ne_p <- colMeans(ne_p)
+
 
 # LGP
 LGP <- na - ne
@@ -221,9 +237,29 @@ knitr::kable(div)
 basic.stats(obj)
 ```
 
-```{r diff_stats}
-diff_stats(obj)
-pairwise_Gst_Hedrick(obj)
+```{r pairwise_G2st}
+pairwise.G2st <- function(dat,diploid=TRUE){
+  dat<-genind2hierfstat(dat)
+  dat<-dat[order(dat[,1]),]
+  pops<-unique(dat[,1])
+  npop<-length(pops)
+  fstmat <- matrix(nrow=npop,ncol=npop,dimnames=list(pops,pops))
+  if (is.factor(dat[,1])) {
+    dat[,1]<-as.numeric(dat[,1])
+    pops<-as.numeric(pops)
+  }
+  for(a in 2:npop){
+    for(b in 1:(a-1)){
+      subdat <- dat[dat[,1] == pops[a] | dat[,1]==pops[b],]
+      fstmat[a,b]<-fstmat[b,a]<- basic.stats(subdat,diploid=diploid)$overall[10]
+    }
+    
+  }
+  fstmat <- fstmat[ -1, -npop]
+  fstmat
+}
+
+pairwise.G2st(obj)
 ```
 
 
@@ -267,7 +303,7 @@ ggplot(private) + geom_tile(aes(x = population,
   ggtitle("Private alleles per population")
 ```
 
-# Is mean observed H significantly lower than mean expected H ?
+### Is mean observed H significantly different?
 ```{r t-test, cache=T}
 summ <- summary(obj)
 bartlett.test(list(summ$Hexp,summ$Hobs))
@@ -304,14 +340,6 @@ kable(hw.holm.mat, "html", caption = "HWE exact test p-values after Holm-Bonferr
  kable_styling(bootstrap_options = "striped", full_width = F)
 ```
 
-```{r basic.stats_fis, cache=T}
-colMeans(basic.stats(obj)$Fis, na.rm = T)
-# pops <- seppop(obj) 
-# stats <- list()
-# for(i in 1:length(pops)){
-#   stats[[i]] <- basic.stats(pops[[i]])
-# }
-```
 
 ### Linkage Disequilibrium
 ```{r LD_1, cache = T}
@@ -429,7 +457,7 @@ ggplot(DF, aes(Var1, Var2, fill = value))+
 ### Fst table
 ```{r Fst_table, cache=T}
 pair_fst <- genet.dist(obj, method = "Nei87")
-
+pair_fst
 ```
 
 ### Cavalli-Sforza and Edwards Chord distance
@@ -460,80 +488,7 @@ knitr::kable(cav_sf, "html", caption = "Cavalli-Sforza and Edwards Chord distanc
  kable_styling(bootstrap_options = "striped", full_width = F)
 ```
 
-```{r cavalli-sforza_2, eval=FALSE, fig.width=10, cache=T, dpi=300, include=FALSE}
-# functions
-fungen <- function(pop_column) {
-  force(pop_column)
-  function(x) {
-    dat <- cbind(pop_column, x)
-    res <- nj(genet.dist(dat, method = "Dch"))
-    res$tip.label <- levels(dat[[1]])
-    res
-  }
-}
 
-genet.tree.nj <- fungen(obj_hier[1])
-
-fungen <- function(pop_column) {
-  force(pop_column)
-  function(x) {
-    dat <- cbind(pop_column, x)
-    res <- upgma(genet.dist(dat, method = "Dch"))
-    res$tip.label <- levels(dat[[1]])
-    res
-  }
-}
-
-genet.tree.upgma <- fungen(obj_hier[1])
-
-
-
-
-# Create tree
-tree_upgma <- genet.tree.upgma(obj_hier[-1])
-num_boot <- 1000
-tree_upgma$node.label <- boot.phylo(phy = tree_upgma, x = obj_hier[-1],
-                                    FUN = genet.tree.upgma, B = num_boot
-                                    , jumble = FALSE
-                                    , mc.cores = 4  # does not work on Windows
-                                    )
-
-# Display tree
-nodelabs <- (100 / num_boot) *  tree_upgma$node.label
-nodelabs[nodelabs < 50] <- NA
-plot.phylo(tree_upgma, cex = 1, font = 2, adj = 0, xpd = TRUE,
-           label.offset = 0.0125)
-nodelabels(nodelabs, adj = c(1.3, -0.5), frame = "n", cex = 0.8,
-           font = 3, xpd = TRUE)
-title(main = "Dendrogram based on Cavalli-Sforza and Edwards Chord distance",
-      sub = "method: UPGMA, 1000 Bootstraps")
-axisPhylo(side = 1)
-
-
-
-# Create tree
-tree_nj <- genet.tree.nj(obj_hier[-1])
-num_boot <- 1000 # number of bootstraps
-tree_nj$node.label <- boot.phylo(phy = tree_nj, x = obj_hier[-1], 
-                                 FUN = genet.tree.nj, B = num_boot
-                                 , jumble = FALSE
-                                 , mc.cores = 4  # does not work on Windows
-)
-
-# Display tree
-nodelabs <- (100 / num_boot) *  tree_nj$node.label
-nodelabs[nodelabs < 50] <- NA # hide values below 50
-plot.phylo(tree_nj, cex = 1, font = 2, adj = 0, xpd = TRUE, 
-           label.offset = 0.0125, type = "phylogram")
-nodelabels(nodelabs, adj = c(1.3, -0.5), frame = "n", cex = 0.8, 
-           font = 3, xpd = TRUE)
-title(main = "Dendrogram based on Cavalli-Sforza and Edwards Chord distance",
-      sub = "method: Neighbor-Joining, 1000 Bootstraps")
-add.scale.bar(lwd = 2, length = 0.05, x = 0.24, y=1)
-# to find optimal position for scale bar write on the console:
-# locator(1)
-# and click on the plot where you want to place the scale bar
-```
 
 ### Nei distance 1972 1978
 
@@ -554,38 +509,6 @@ kable(nei, "html", caption = "Nei's Standard genetic distance between population
 ```
 
 
-```{r nei_poppr, eval=FALSE, fig.width=10, cache=T, dpi=300, include=FALSE}
-set.seed(1994)
-
-
-tree_upgma <- aboot(obj, strata = ~Country/Pop, sample = 1000, 
-                    cutoff = 50, distance = "nei.dist", tree = "upgma",                     
-                    showtree = F)
-
-nodelabs <- round(tree_upgma$node.label, 2)
-plot.phylo(tree_upgma, cex = 1, font = 2, adj = 0, xpd = TRUE, 
-label.offset = 0.0125)
-nodelabels(nodelabs, adj = c(1.3, -0.5), frame = "n", cex = 0.8, 
-font = 3, xpd = TRUE)
-title(main = "Dendrogram based on Nei's standard genetic distance",
-      sub = "method: UPGMA, 1000 Bootstraps")
-axisPhylo(side = 1)
-
-
-
-tree_nj <- aboot(obj, strata = ~Country/Pop, sample = 1000, cutoff = 50,
-                 distance = "nei.dist", tree = "nj", showtree = F)
-
-nodelabs <- round(tree_nj$node.label, 2)
-plot.phylo(tree_nj, cex = 1, font = 2, adj = 0, xpd = TRUE, 
-label.offset = 0.0125)
-nodelabels(nodelabs, adj = c(1.3, -0.5), frame = "n", cex = 0.8, 
-font = 3, xpd = TRUE)
-title(main = "Dendrogram based on Nei's standard genetic distance",
-      sub = "method: Neighbor-Joining, 1000 Bootstraps")
-add.scale.bar(lwd = 2, length = 0.01, x = 0.24, y=1)
-```
-
 ### Principal Component Analysis
 ```{r pca, dpi=96, cache=T}
 
@@ -601,13 +524,14 @@ fviz_eig(pca.obj, main = "Scree plot of PCA")
 ggord(pca.obj, pop(obj), arrow = NULL, txt = NULL, grp_title="Populations", ellipse=T, poly=FALSE, size=2, alpha=.8, coord_fix=F, axes = c("1", "2")) +
   geom_hline(yintercept=0,linetype=2) + 
   geom_vline(xintercept=0,linetype=2) +
-  ggtitle("Principal Component Analysis")
+  ggtitle("Principal Component Analysis") +
+  scale_shape_manual('Groups', values = c(15, 17))
 
 ggord(pca.obj, pop(obj), arrow = NULL, txt = NULL, grp_title="Populations", ellipse=T, poly=FALSE, size=2, alpha=.8, coord_fix=F, axes = c("1", "3")) +
   geom_hline(yintercept=0,linetype=2) + 
   geom_vline(xintercept=0,linetype=2) +
-  ggtitle("Principal Component Analysis")
-  #scale_colour_brewer(palette="Set3")
+  ggtitle("Principal Component Analysis") +
+  scale_shape_manual('Groups', values = c(15, 17))
 
 loadingplot(pca.obj$c1^2, threshold = 0.05)
 ```
@@ -625,46 +549,21 @@ fviz_eig(ca1, main = "Scree plot of CA")
 ggord(ca1, pop(obj), arrow = NULL, txt = NULL, grp_title="Populations", ellipse=T, poly=FALSE, size=2, alpha=.8, coord_fix=F, axes = c("1", "2")) +
   geom_hline(yintercept=0,linetype=2) + 
   geom_vline(xintercept=0,linetype=2) +
-  ggtitle("Correspondence Analysis") 
+  ggtitle("Correspondence Analysis") +
+  scale_shape_manual('Groups', values = c(15, 17))
+
 
 ggord(ca1, pop(obj), arrow = NULL, txt = NULL, grp_title="Populations", ellipse=T, poly=FALSE, size=2, alpha=.8, coord_fix=F, axes = c("1", "3")) +
   geom_hline(yintercept=0,linetype=2) + 
   geom_vline(xintercept=0,linetype=2) +
-  ggtitle("Correspondence Analysis")
+  ggtitle("Correspondence Analysis") +
+  scale_shape_manual('Groups', values = c(15, 17))
+  # scale_color_viridis_d(option = "D")
   #scale_colour_brewer(palette="Set3")
 
 loadingplot(ca1$c1^2, threshold = 8)
 ```
 
-### DAPC
-```{r k-means, eval=FALSE, cache=T, dpi=300, include=FALSE}
-
-# based on https://github.com/thibautjombart/adegenet/blob/master/tutorials/tutorial-dapc.pdf
-grp <- find.clusters(obj, max.n.clust=20, n.pca = 1000, n.clust = 3)
-```
-BIC: Bayesian Information Criterion
-
-```{r dapc, eval=FALSE, fig.width=10, cache=T, dpi=300, include=FALSE}
-set.seed(1994)
-
-assingment_table <- table(pop(obj), grp$grp)
-knitr::kable(assingment_table, caption = "actual groups (”ori”) vs inferred groups (”inf”)")
-
-table.value(table(pop(obj), grp$grp), col.lab=paste("inf", 1:9), row.lab=paste("ori", 1:9))
-
-dapc2 <- dapc(obj, n.da=100, n.pca=100)
-temp <- optim.a.score(dapc2)
-
-dapc1 <- dapc(obj, grp$grp, n.pca = temp$best, n.da = 10)
-
-scatter(dapc1, posi.da="bottomright", bg="white", pch=17:19, cstar=0, scree.pca=TRUE, posi.pca="bottomleft", n.pca=30, n.da=10)
-
-# devtools::install_github("zkamvar/ggcompoplot")
-ggcompoplot(dapc1, obj, cols = 3) + 
-  theme(axis.text.x = element_blank()) +
-  scale_fill_brewer(palette = "Set2") +
-  ylab("membership probability")
-```
 
 ### AMOVA
 ```{r amova, cache=T}
@@ -674,102 +573,6 @@ poppr.amova(obj, ~Pop, within = F)
 ### AMOVA - no threshold for missing values
 ```{r amova_within, cache=T}
 poppr.amova(obj, ~Pop, within = F, cutoff = 0.5)
-```
-
-```{r amova_arlequin, eval=FALSE, cache=T, include=FALSE}
-### Hierarchical AMOVA - within variation included (as calculated using Arlequin)
-poppr.amova(obj, ~Country/Pop, within = T)
-```
-
-### IBD
-```{r ibd, eval=FALSE, cache=T, dpi=300, include=FALSE}
-# DGEO IS WRONG SEE WARNING
-#change hierarchy to country level
-setPop(obj) <- ~Country
-
-obj_pop <- genind2genpop(obj)
-Dgen <- dist.genpop(obj_pop,method=2) #maybe only with genepop object
-# Dgen <- genet.dist(obj, method = "Ds")
-# theoretically any genetic distance can be used
-# Dgeo <- dist(obj_pop$other$xy)
-geo <- data.frame(popNames(obj))
-x <- c(47.81, 46.09, 40.09)
-y <- c(12.87, 14.29, 22.44)
-geo$x <- x
-geo$y <- y
-Dgeo <- dist(geo)
-
-ibd <- mantel.randtest(Dgen,Dgeo) 
-ibd
-
-plot(ibd)
-
-library(MASS) 
-dens <- kde2d(Dgeo,Dgen, n=300) 
-myPal <- colorRampPalette(c("white","blue","gold", "orange", "red")) 
-plot(Dgeo, Dgen, pch=20,cex=.5) 
-image(dens, col=transp(myPal(300),.7), add=TRUE) 
-abline(lm(Dgen~Dgeo)) 
-title("Isolation by distance plot")
-```
-
-
-```{r ibd_2, eval=FALSE, cache=T, include=FALSE}
-
-#change hierarchy to country level
-setPop(obj) <- ~Country
-
-# Dgen <- dist.genpop(obj_pop,method=2) #maybe only with genepop object
-Dgen <- dist(obj$tab)
-# theoretically any genetic distance can be used
-Dgeo <- dist(obj$other$xy)
-
-ibd <- mantel.randtest(Dgen,Dgeo) 
-ibd
-
-plot(ibd)
-
-# library(MASS)
-# dens <- kde2d(Dgeo,Dgen, n=10)
-# myPal <- colorRampPalette(c("white","blue","gold", "orange", "red"))
-# plot(Dgeo, Dgen, pch=20,cex=.5)
-# image(dens, col=transp(myPal(10),.7), add=TRUE)
-# abline(lm(Dgen~Dgeo))
-# title("Isolation by distance plot")
-
-plot(Dgeo, Dgen, pch=20,cex=.5)
-abline(lm(Dgen~Dgeo))
-title("Isolation by distance plot")
-```
-
-```{r ibd_3, eval=FALSE, cache=T, include=FALSE}
-
-#change hierarchy to country level
-setPop(obj) <- ~Country
-
-obj_test <- popsub(obj, sublist = c("GR", "DE"))
-
-# Dgen <- dist.genpop(obj_pop,method=2) #maybe only with genepop object
-Dgen <- dist(obj_test$tab)
-# theoretically any genetic distance can be used
-Dgeo <- dist(obj_test$other$xy)
-
-ibd <- mantel.randtest(Dgen,Dgeo) 
-ibd
-
-# plot(ibd)
-
-# library(MASS)
-# dens <- kde2d(Dgeo,Dgen, n=10)
-# myPal <- colorRampPalette(c("white","blue","gold", "orange", "red"))
-# plot(Dgeo, Dgen, pch=20,cex=.5)
-# image(dens, col=transp(myPal(10),.7), add=TRUE)
-# abline(lm(Dgen~Dgeo))
-# title("Isolation by distance plot")
-
-plot(Dgeo, Dgen, pch=20,cex=.5)
-abline(lm(Dgen~Dgeo))
-title("Isolation by distance plot")
 ```
 
 ### N~e~ estimation
@@ -817,6 +620,24 @@ Bootstraping randomly sampling loci with replacement because including or exclud
 Fis ci - Make plot scatter plot with error bars - Check significance with t-test
 ```{r fis_ci}
 boot.ppfis(obj)
+
+stats$Fis
+
+Gtest <- gstat.randtest(obj, nsim=999) 
+Gtest
+plot(Gtest)
+
+bartlett.test(list(stats$Ho[,1], stats$Ho[,2]))
+
+t.test(stats$Ho[,1], stats$Ho[,2], var.equal = T,
+       pair=F, alternative = "two.sided")
+
+t.test(stats$Fis[,1], stats$Fis[,2], var.equal = T,
+       pair=F, alternative = "two.sided")
+
+ttest<-t.test(private_alleles(obj, count.alleles=F)[1,],
+       private_alleles(obj, count.alleles=F)[2,],
+              pair=F, alternative = "two.sided")
 ```
 
 
