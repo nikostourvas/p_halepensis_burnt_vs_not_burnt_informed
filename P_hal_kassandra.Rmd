@@ -252,23 +252,25 @@ colnames(y) <- popNames(obj)
 #ne hierfstat
 stats[["ne"]] <- 1 / (1 - (stats[["Hs"]]))
 
-ne_h_means <- colMeans(stats[["ne"]], na.rm=T)
-ne <- c(ne_h_means, mean(stats$ne))
+table_out <- function(obj, variable, name){
+  
+means <- colMeans(variable, na.rm=T)
+out <- c(means, mean(variable))
 
-ne <- as.data.frame(ne)
-rownames(ne) <- Pops
-colnames(ne) <- "ne"
-
-
-sem_ne <- apply(stats$ne, 2, function(x) sd(x) / sqrt(length(x))) # 2 means work along columns
-sem_ne_mean <- sd(stats$ne) / sqrt(length(stats$ne))
-
-sem_ne <- c(sem_ne, sem_ne_mean)
-sem_ne <- as.data.frame(sem_ne)
-rownames(sem_ne) <- Pops
-colnames(sem_ne) <- "SE_ne"
+out <- as.data.frame(out)
+Pops <- c(popNames(obj), "Total")
+rownames(out) <- Pops
+colnames(out) <- name
 
 
+sem_out <- apply(variable, 2, function(x) sd(x) / sqrt(length(x))) # 2 means work along columns
+sem_out_mean <- sd(variable) / sqrt(length(variable))
+
+sem_out <- as.data.frame(c(sem_ne, sem_ne_mean))
+rownames(sem_out) <- Pops
+colnames(sem_out) <- paste("SE", name, sep = "_")
+
+}
 
 
 #ne adegenet
