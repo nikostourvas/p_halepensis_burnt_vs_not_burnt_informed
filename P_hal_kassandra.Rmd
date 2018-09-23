@@ -117,6 +117,16 @@ N[[i]] <- nrow(obj_list[[i]]@tab)
 N <- unlist(N)
 N <- c(N, sum(N))
 
+N <- as.matrix(N)
+rownames(N) <- Pops
+colnames(N) <- "N"
+
+
+
+
+
+
+
   # get summary statistics for each pop
 stats_p <- list()
 for(i in 1: length(obj_list)){
@@ -128,7 +138,13 @@ uhe <- vector(mode = "double")
 for(i in 1: length(obj_list)){
 uhe[i] <- stats_p[[i]][ length(stats_p[[i]][,3]) , 3 ] # I pick the last line
 }
-uhe_col <- c(uhe, mean(uhe)) # column to be added to the summary table
+uhe <- c(uhe, mean(uhe)) # column to be added to the summary table
+uhe <- as.matrix(uhe)
+rownames(uhe) <- Pops
+colnames(uhe) <- "uHE"
+
+
+
 
   # isolate uhe loci values for each pop
 summ_uhe <- list()
@@ -138,15 +154,26 @@ summ_uhe[[i]] <- stats_p[[i]][ -length(stats_p[[i]][,3]) , 3 ] # I pick all line
   #calculate standard error of the mean
 sem_uhe <- list()
 for(i in 1: length(obj_list)){
-sem_uhe[[i]] <- sd(summ_uhe[[i]])/sqrt(length(summ_uhe[[i]]))
+sem_uhe[[i]] <- sd(summ_uhe[[i]]) / sqrt(length(summ_uhe[[i]]))
 }
 sem_uhe <- unlist(sem_uhe)
 
   #calculate standard error of the mean of the means
-sem_uhe_2 <- sd(unlist(summ_uhe)) / sqrt(length(unlist(summ_uhe)))
+sem_uhe_mean <- sd(unlist(summ_uhe)) / sqrt(length(unlist(summ_uhe)))
 
     #combine standard errors
-sem_uhe_col <- c(sem_uhe, sem_uhe_2)
+sem_uhe <- c(sem_uhe, sem_uhe_mean)
+sem_uhe <- as.matrix(sem_uhe)
+rownames(sem_uhe) <- Pops
+colnames(sem_uhe) <- "SE_uHe"
+
+
+
+
+
+
+
+
 
   # isolate na mean value for each pop
 na <- vector(mode = "double")
@@ -154,6 +181,11 @@ for(i in 1: length(obj_list)){
 na[i] <- stats_p[[i]][ length(stats_p[[i]][,1]) , 1 ] # I pick the last line
 }
 na_col <- c(na, mean(na)) # column to be added to the summary table
+
+
+
+
+
 
   # isolate na loci values for each pop
 summ_na <- list()
@@ -174,12 +206,70 @@ sem_na_2 <- sd(unlist(summ_na)) / sqrt(length(unlist(summ_na)))
 sem_na_col <- c(sem_na, sem_na_2)
 
 
+
+
+
+
+
+
+
+
 # basic stats hierfstat
 stats <- basic.stats(obj)
 
+# make hierfstat output same as poppr's so as to use the same function later
+# maybe though I should transform poppr as hierfstat's data.frame structure as the code looks cleaner (check "ne hierfstat)
+test <- list()
+for(i in 1:length(obj_list))
+test[[i]] <- stats$Ho[,i]
+
+#########################3
+
+poppr2hierfstat_out <- function(obj, variable){
+  
+obj_list <- seppop(obj)
+  
+stats_poppr <- list()
+for(i in 1: length(obj_list)){
+  stats_poppr[[i]] <- locus_table(obj_list[[i]])
+}
+
+x <- list()
+for(i in 1:length(obj_list))
+x[[i]] <- stats_poppr[[i]][-nrow(stats_poppr[[1]]), variable]
+
+y <- as.matrix(as.data.frame(x))
+colnames(y) <- popNames(obj)
+}
+#######################3
+
+############################
+
+
+#########################
+
+
 #ne hierfstat
 stats[["ne"]] <- 1 / (1 - (stats[["Hs"]]))
-ne_h <- colMeans(stats[["ne"]], na.rm=T)
+
+ne_h_means <- colMeans(stats[["ne"]], na.rm=T)
+ne <- c(ne_h_means, mean(stats$ne))
+
+ne <- as.data.frame(ne)
+rownames(ne) <- Pops
+colnames(ne) <- "ne"
+
+
+sem_ne <- apply(stats$ne, 2, function(x) sd(x) / sqrt(length(x))) # 2 means work along columns
+sem_ne_mean <- sd(stats$ne) / sqrt(length(stats$ne))
+
+sem_ne <- c(sem_ne, sem_ne_mean)
+sem_ne <- as.data.frame(sem_ne)
+rownames(sem_ne) <- Pops
+colnames(sem_ne) <- "SE_ne"
+
+
+
 
 #ne adegenet
 stats_a_list <- list()
@@ -192,7 +282,7 @@ for(i in 1:length(stats_a_list)){
   ne[[i]] <- 1 / (1 - stats_a_list[[i]][["Hexp"]])
 }
 ne <- as.data.frame(ne)
-ne <- colMeans(ne)
+ne_means <- colMeans(ne)
 
 #ne poppr
 ne_p <- list()
@@ -200,12 +290,24 @@ for(i in 1:length(stats_p))
   ne_p[[i]] <- 1 / (1 - stats_p[[i]][-nrow(stats_p[[1]]), "Hexp"])
   
 ne_p <- as.data.frame(ne_p)
-ne_p <- colMeans(ne_p)
+ne_p_means <- colMeans(ne_p)
 
 
 # LGP
-LGP <- na - ne
-LGP <- LGP[-3]
+LGP <- summ_na - ne
+
+  #   #calculate standard error of the mean
+  # sem_na <- list()
+  # for(i in 1: length(obj_list)){
+  # sem_na[[i]] <- sd(summ_na[[i]])/sqrt(length(summ_na[[i]]))
+  # }
+  # sem_na <- unlist(sem_na)
+
+  # sem of LGP
+sem_LGP <- vector(mode = "double")
+for(i in 1:length(obj_list)){
+  sem_LGP[i] <- sd(LGP[i]) / sqrt(length(LGP[i]))
+}
 
 # allelic richness
 ar <- allelic.richness(obj)
