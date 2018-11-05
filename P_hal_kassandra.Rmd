@@ -745,7 +745,7 @@ ttest<-t.test(private_alleles(obj, count.alleles=F)[1,],
 ```
 
 
-# Reproducibility - Loaded packages
+# Reproducibility
 ```{r reproducibility}
 devtools::session_info()
 ```
