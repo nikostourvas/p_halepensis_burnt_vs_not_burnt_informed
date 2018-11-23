@@ -30,7 +30,7 @@ suppressPackageStartupMessages({
   library(factoextra)
   library(ggord)
   library(RColorBrewer)
-  library(ggcompoplot)
+  # library(ggcompoplot)
   library(kableExtra)
 })
 ```
@@ -234,12 +234,14 @@ for(i in 1: length(obj_list)){
   stats_poppr[[i]] <- locus_table(obj_list[[i]])
 }
 
-x <- list()
+table_out <- list()
 for(i in 1:length(obj_list))
-x[[i]] <- stats_poppr[[i]][-nrow(stats_poppr[[1]]), variable]
+table_out[[i]] <- stats_poppr[[i]][-nrow(stats_poppr[[1]]), variable]
 
-y <- as.matrix(as.data.frame(x))
-colnames(y) <- popNames(obj)
+table_out <- as.matrix(as.data.frame(table_out))
+colnames(table_out) <- popNames(obj)
+
+return(table_out)
 }
 #######################3
 
@@ -266,10 +268,13 @@ colnames(out) <- name
 sem_out <- apply(variable, 2, function(x) sd(x) / sqrt(length(x))) # 2 means work along columns
 sem_out_mean <- sd(variable) / sqrt(length(variable))
 
-sem_out <- as.data.frame(c(sem_ne, sem_ne_mean))
+sem_out <- as.data.frame(c(sem_out, sem_out_mean))
 rownames(sem_out) <- Pops
 colnames(sem_out) <- paste("SE", name, sep = "_")
 
+table_out <- cbind(out, sem_out)
+
+return(table_out)
 }
 
 
