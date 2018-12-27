@@ -614,29 +614,12 @@ kable(hw.holm.mat, "html", caption = "HWE exact test p-values after Holm-Bonferr
 
 
 ### Linkage Disequilibrium
-```{r LD_1, cache = T}
-test_LD(inputFile = "PINUS_LOCI_KASSANDRA.txt", outputFile = "PINUS_LOCI_KASSANDRA_LD_genepop.txt", verbose = TRUE)
 
-readLines("PINUS_LOCI_KASSANDRA_LD_genepop.txt")
-```
-
-
-```{r LD_2, dpi=300, cache=T}
-
-# Load csv files from analysis using genepop
-# Those files were manualy created from genepop output
-test <- read.csv("LD.csv", header = T)
-library(tidyverse)
-
-# make a list of data.frames according to pop
-LD_list <- split(test, test$Pop)
-for(i in 1:length(LD_list)){
-  LD_list[[i]] <- LD_list[[i]][,-1]
-}
+```{r LD_strataG, dpi=300, cache=T}
 
 # function to create triangular data.frame
 triangle_mat <- function(data){
-  data <- spread(data, Locus.2, P.Value)
+  data <- spread(data, Locus.2, p.value)
   
   vector <- vector(mode = "integer") #order of columns based on how many values they have
   for(i in 2:length(colnames(data))){
@@ -677,53 +660,7 @@ triangle_mat <- function(data){
 }
 
 
-
-
-
-LD_dfs <- list()
-for(i in names(LD_list)){
-  LD_dfs[[i]] <- as.matrix(triangle_mat(LD_list[[i]]))
-}
-
-
-for(i in names(LD_list)){
- LD_dfs[[i]] <- melt(LD_dfs[[i]], na.rm = T) 
-}
-
-# multiple test correction
-for(i in names(LD_list)){
-  LD_dfs[[i]][,"value"]<- p.adjust(LD_dfs[[i]][,"value"], method = "holm") 
-}
-
-# add a pop column to each data.frame
-for(i in names(LD_list)){
-  LD_dfs[[i]]$pop <- names(LD_dfs[i]) 
-}
-
-# create on big tidy data.frame
-DF <- bind_rows(LD_dfs)
-
-
-
-ggplot(DF, aes(Var1, Var2, fill = value))+
-  geom_tile(color = "white") +
-  scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
-                       midpoint = 0.5, limit = c(0,1), 
-                       # space = "Lab",
-                       name = "P-value") +
-  theme_minimal()+ 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   size = 8, hjust = 1),
-        axis.text.y = element_text(size = 8))+
-  theme(axis.title.x = element_blank(),
-        axis.title.y = element_blank()) +
-  # coord_fixed() + # make it squared
-  facet_wrap(~ pop, nrow = 3) +
-  ggtitle("LD p-values after Holm-Bonferroni correction")
-
-```
-
-```{r LD_strataG, dpi=300, cache=T}
+# function to calculate LD for genind objects
 LDgenind <- function(obj){
 
 library(pegas)
@@ -762,10 +699,65 @@ for(i in popNames(obj)){
   LD_list[[i]] <- LDgenepop(obj_g_list[[i]])
 }
 
-return(LD_list)
+return(LD_list) # raw genepop output
 }
 
-LD_list <- LDgenind(obj)
+LD_genepop <- LDgenind(obj)
+LD_genepop # raw genepop output
+
+
+
+# function to transform the raw genepop output to a nice graph
+LD_df_ggplot <- function(LD_genepop){
+# create new data.frame with only the columns that are useful
+new_dfs <- list()
+for(i in names(LD_genepop)){
+  new_dfs[[i]] <- LD_genepop[[i]][,1:3]
+}
+
+# apply multiple test correction
+for(i in names(new_dfs)){
+  new_dfs[[i]][,"p.value"]<- p.adjust(new_dfs[[i]][,"p.value"], method = "holm") 
+}
+
+# create triangle data.frame
+LD_dfs <- list()
+for(i in names(new_dfs)){
+  LD_dfs[[i]] <- as.data.frame(triangle_mat(new_dfs[[i]]))
+}
+
+# In this step a new column is added containing the names for Locus.1
+# This is required for the subsequent steps
+for(i in names(LD_dfs)){
+  LD_dfs[[i]]$Locus.1 <- rownames(LD_dfs[[i]])
+}
+
+# Create one data.frame with all data & assign proper column names
+LD_dfs <- na.omit(melt(LD_dfs, 'Locus.1'))
+names(LD_dfs) <- c("Locus.1", "Locus.2", "p.value", "pop")
+
+return(LD_dfs)
+}
+
+LD_df <- LD_df_ggplot(LD_genepop)
+
+
+# Plot
+ggplot(LD_df, aes(Locus.1, Locus.2, fill = p.value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+                       midpoint = 0.5, limit = c(0,1), 
+                       # space = "Lab",
+                       name = "P-value") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   size = 8, hjust = 1),
+        axis.text.y = element_text(size = 8))+
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  # coord_fixed() + # make it squared
+  facet_wrap(~ pop, nrow = 3) +
+  ggtitle("LD p-values after Holm-Bonferroni correction")
 
 ```
 
